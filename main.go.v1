@@ -1,0 +1,192 @@
+package main
+
+import (
+	"bufio"
+	"context"
+	"encoding/json"
+	"fmt"
+	"log"
+	"net/http"
+	"os"
+	"os/signal"
+	"strings"
+	"sync"
+	"syscall"
+	"time"
+)
+
+type MedicineEntry struct {
+	ProductCodeNAPPI string
+	ProductName      string
+	ProductStrength  string
+	ProductForm      string
+}
+
+var (
+	medicineData []MedicineEntry
+	dataLock     sync.RWMutex
+)
+
+// parseFixedWidthLine parses a single line from the fixed-width-delimited file.
+func parseFixedWidthLine(line string) MedicineEntry {
+	productCodeNAPPI := strings.TrimSpace(line[11:20])
+	productName := strings.TrimSpace(line[20:58])
+	productStrength := strings.TrimSpace(line[59:75])
+	productForm := strings.TrimSpace(line[75:79])
+	
+	return MedicineEntry{
+		ProductCodeNAPPI: productCodeNAPPI,
+		ProductName: productName,
+		ProductStrength: productStrength,
+		ProductForm: productForm,
+	}
+}
+
+// loadNAPPIFile loads the content of the position-delimited NAPPI file into memory.
+func loadNAPPIFile(filePath string) error {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	var tempData []MedicineEntry
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		entry := parseFixedWidthLine(line)
+		tempData = append(tempData, entry)
+		
+	}
+
+	if err := scanner.Err(); err != nil {
+		return err
+	}
+
+	// Update the global data under a write lock
+	dataLock.Lock()
+	medicineData = tempData
+	dataLock.Unlock()
+
+	fmt.Println("entry count:", len(tempData))
+
+	return nil
+}
+
+// searchMedicines filters the medicine data based on the search term.
+func searchMedicines(term string) []MedicineEntry {
+	dataLock.RLock()
+	defer dataLock.RUnlock()
+
+	var results []MedicineEntry
+	lowerTerm := strings.ToLower(term)
+
+	for _, entry := range medicineData {
+		if strings.Contains(strings.ToLower(entry.ProductName), lowerTerm) {
+			results = append(results, entry)
+		}
+	}
+	
+	/*
+	results1 := make(map[string]MedicineEntry)
+	results2 := make(map[string]MedicineEntry)
+	results3 := make(map[string]MedicineEntry)
+
+	for _, entry := range medicineData {
+		if strings.HasPrefix(strings.ToLower(entry.ProductName), lowerTerm) {
+			_, ok := results1[entry.ProductCodeNAPPI]
+			if !ok {
+				results1[entry.ProductCodeNAPPI] = entry
+			}
+			
+		} else if strings.Contains(strings.ToLower(entry.ProductName), " " + lowerTerm) {
+			_, ok := results2[entry.ProductCodeNAPPI]
+			if !ok {
+				results2[entry.ProductCodeNAPPI] = entry
+			}
+
+		} else if strings.Contains(strings.ToLower(entry.ProductName), lowerTerm) {
+			_, ok := results3[entry.ProductCodeNAPPI]
+			if !ok {
+				results3[entry.ProductCodeNAPPI] = entry
+			}
+		}
+	}
+
+	for  _, entry := range results1 {
+		results = append(results, entry)
+	}
+	
+	for  _, entry := range results2 {
+		results = append(results, entry)
+	}
+	
+	for  _, entry := range results3 {
+		results = append(results, entry)
+	}
+	*/
+	
+	return results
+}
+
+func autocompleteHandler(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query().Get("term")
+	if query == "" {
+		http.Error(w, "Search term is required", http.StatusBadRequest)
+		return
+	}
+	
+	if len(query) < 3 {
+		http.Error(w, "Search term must be at least 3 characters long", http.StatusBadRequest)
+		return
+	}
+
+	start := time.Now()
+
+	results := searchMedicines(query)
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(map[string]interface{}{"results": results}); err != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+	}
+	
+	elapsed := time.Since(start)
+	fmt.Println("Elapsed time:", elapsed)
+}
+
+func main() {
+
+	// Path to the NAPPI file
+	filePath := "nappi_data.txt"
+
+	// Load the NAPPI data on startup
+	log.Println("Loading the NAPPI data...")
+	start := time.Now()
+	if err := loadNAPPIFile(filePath); err != nil {
+		log.Fatalf("Failed to load NAPPI file: %v", err)
+	}
+	elapsed := time.Since(start)
+	fmt.Println("Elapsed time:", elapsed)
+
+	httpServer := &http.Server{Addr: ":8080"}
+
+	// Handle graceful shutdown
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-quit
+		log.Println("Shutting down server...")
+		if err := httpServer.Shutdown(context.Background()); err != nil {
+			log.Fatalf("Server forced to shutdown: %v", err)
+		}
+	}()
+
+	http.HandleFunc("/autocomplete", autocompleteHandler)
+
+	log.Println("Server is running on port 8080...")
+	if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		log.Fatalf("Failed to start server: %v", err)
+	}
+
+	log.Println("Server exited cleanly")
+}
