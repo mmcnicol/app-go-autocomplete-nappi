@@ -1,5 +1,13 @@
 # app-go-autocomplete-nappi
 
+* an init() function is used to:
+  * read 450,000 entries from a text file and hold it in-memory.
+  * create an in-memory index of unique words from entries.
+* a handler
+  * receives requests for autocomplete, which can be one or more words, with each word being at least 3 characters long.
+  * uses the index to search for entries that contain the given search words
+  * returns the list of matching entries.
+
 ## download data
 
 19/01/2025
