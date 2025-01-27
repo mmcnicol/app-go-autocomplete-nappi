@@ -28,17 +28,17 @@ curl http://localhost:8080/autocomplete?term=ventricular -o "out.json"
 
 ## example output
 
-C:\Data\github\nappi>go run .
-2025/01/21 19:10:33 Loading the NAPPI data...
-entry count: 454954
-Elapsed time: 340.2411ms
-2025/01/21 19:10:33 Building index for ProductName auto complete data...
-productNameIndex size: 288106
-Elapsed time: 201.7059ms
-2025/01/21 19:10:34 Server is running on port 8080...
-Elapsed time: 43.8917ms
-Elapsed time: 45.3861ms
-2025/01/21 19:11:05 Shutting down server...
+C:\Data\github\nappi>go run .  
+2025/01/21 19:10:33 Loading the NAPPI data...  
+entry count: 454954  
+Elapsed time: 340.2411ms  
+2025/01/21 19:10:33 Building index for ProductName auto complete data...  
+productNameIndex size: 288106  
+Elapsed time: 201.7059ms  
+2025/01/21 19:10:34 Server is running on port 8080...  
+Elapsed time: 43.8917ms  
+Elapsed time: 45.3861ms  
+2025/01/21 19:11:05 Shutting down server...  
 2025/01/21 19:11:05 Server exited cleanly
 
 C:\Data\github\nappi>
