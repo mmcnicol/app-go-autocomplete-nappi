@@ -107,7 +107,7 @@ func initIndex() {
                 productNameIndex[productName] = append(productNameIndex[productName], i) 
         }
 		
-		fmt.Println("productNameIndex size:", len(productNameIndex))
+	fmt.Println("productNameIndex size:", len(productNameIndex))
 }
 
 // FindMedicineEntriesByKeywords performs an efficient keyword search 
